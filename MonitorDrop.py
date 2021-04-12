@@ -24,7 +24,6 @@ from ryu.controller.handler import set_ev_cls
 from ryu.lib import hub
 
 
-
 class MonitorDrop(simple_switch_13.SimpleSwitch13):
 
     def __init__(self, *args, **kwargs):
@@ -62,7 +61,6 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
         req = parser.OFPFlowStatsRequest(datapath)
         datapath.send_msg(req)
 
-
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
         body = ev.msg.body
@@ -76,13 +74,13 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
         for stat in sorted([flow for flow in body if flow.priority == 1],
                            key=lambda flow: (flow.match['in_port'],
                                              flow.match['eth_dst'])):
-            if stat.instructions[0].actions :
+            if stat.instructions[0].actions:
                 self.logger.info('%016x %8x %17s %8x %8d %8d',
-                                ev.msg.datapath.id,
-                                stat.match['in_port'], stat.match['eth_dst'],
-                                stat.instructions[0].actions[0].port,
-                                stat.packet_count, stat.byte_count)
-            else :
+                                 ev.msg.datapath.id,
+                                 stat.match['in_port'], stat.match['eth_dst'],
+                                 stat.instructions[0].actions[0].port,
+                                 stat.packet_count, stat.byte_count)
+            else:
                 self.logger.info('%016x %8x %17s %8x %8d %8d',
                                  ev.msg.datapath.id,
                                  stat.match['in_port'], stat.match['eth_dst'],
@@ -94,11 +92,10 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
                 #                  -1,
                 #                  stat.packet_count, stat.byte_count))
 
-
     @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
     def _port_stats_reply_handler(self, ev):
         body = ev.msg.body
-        pk_stat=[]
+        pk_stat = []
 
         self.logger.info('datapath         port     '
                          'rx-pkts  rx-bytes rx-error '
@@ -111,47 +108,49 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
                              ev.msg.datapath.id, stat.port_no,
                              stat.rx_packets, stat.rx_bytes, stat.rx_errors,
                              stat.tx_packets, stat.tx_bytes, stat.tx_errors)
-        
+
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _over_packet_handler(self, ev):
         body = ev.msg.body
         eth_dst = []
-        eth_src=[]
+        eth_src = []
 
         for stat in sorted([flow for flow in body if flow.priority == 1],
                            key=lambda flow: (flow.match['in_port'],
                                              flow.match['eth_dst'])):
-            if (stat.packet_count > 10 
-                and stat.match['eth_dst'] not in eth_dst 
-                and stat.match['eth_src'] not in eth_dst):
+            if (stat.packet_count > 10
+                and stat.match['eth_dst'] not in eth_dst
+                    and stat.match['eth_src'] not in eth_src):
                 eth_dst.append(stat.match['eth_dst'])
-                DiMatch = dict(table_id=stat.table_id, 
-                                in_port=stat.match['in_port'], 
-                                eth_src=stat.match['eth_src'], 
-                                eth_dst=stat.match['eth_dst'])
+                eth_src.append(stat.match['eth_src'])
+                DiMatch = dict(table_id=stat.table_id,
+                               in_port=stat.match['in_port'],
+                               eth_src=stat.match['eth_src'],
+                               eth_dst=stat.match['eth_dst'])
                 # print(DiMatch)
                 self.FlowDrop(Dmatch=DiMatch, datapath=ev.msg.datapath)
 
             # print(type(stat))
             # print(stat.match)
 
-        for ip in eth_dst:
-            self.logger.info('\033[31mWARN:The dst %17s has more than 90 packets\033[0m', ip)
+        for i in range(len(eth_src)):
+            self.logger.info(
+                '\033[31mWARN:%17s to %17s has too more packets\033[0m', eth_src[i], eth_dst[i])
 
-        
-    def FlowDrop(self , Dmatch ,datapath) :
+    def FlowDrop(self, Dmatch, datapath):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        match = parser.OFPMatch(in_port=Dmatch['in_port'], eth_dst=Dmatch['eth_dst'], eth_src=Dmatch['eth_src'])
+        match = parser.OFPMatch(
+            in_port=Dmatch['in_port'], eth_dst=Dmatch['eth_dst'], eth_src=Dmatch['eth_src'])
 
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_CLEAR_ACTIONS, [])]
 
         mod = parser.OFPFlowMod(datapath=datapath,
                                 table_id=Dmatch['table_id'],
-                                match=match, 
+                                match=match,
                                 priority=1,
-                                command=ofproto.OFPFC_ADD, 
+                                command=ofproto.OFPFC_ADD,
                                 instructions=inst)
 
         # self.logger.info(mod)
