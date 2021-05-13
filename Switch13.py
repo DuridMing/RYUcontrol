@@ -13,6 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+# change from Sample_Switch_13.py
+# Add some Group Rule
+
 from ryu.base import app_manager
 from ryu.controller import ofp_event
 from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
@@ -46,7 +50,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         match = parser.OFPMatch()
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
                                           ofproto.OFPCML_NO_BUFFER)]
-        self.GroupRuleByForward(ev=ev ,weight=50)
+        self.GroupRuleByForward(ev=ev, weight=50) # setting Group rule 
         self.add_flow(datapath, 0, match, actions)
 
     def add_flow(self, datapath, priority, match, actions, buffer_id=None):
@@ -119,34 +123,42 @@ class SimpleSwitch13(app_manager.RyuApp):
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
 
-    def GroupRuleByForward(self, ev ,weight=50):
-         # in_port=1,src=10.0.0.1,dst=10.0.0.2,udp,udp_dst=5555--->group id 50
+    # setting GroupRule
+    def GroupRuleByForward(self, ev, weight=50):
+        # in_port=1,src=10.0.0.1,dst=10.0.0.2,udp,udp_dst=5555--->group id 50
 
         msg = ev.msg
         datapath = msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
+
+        # setting switch , datapath --> switch id
         if ev.msg.datapath.id == 1:
-        # group 50--> port3:30%, port2:70%
+            # group 50--> port3:50%, port2:50%
+            # setting action 
             port_1 = 2
             queue_1 = parser.OFPActionSetQueue(0)
             actions_1 = [queue_1, parser.OFPActionOutput(port_1)]
-            
+
             port_2 = 3
             queue_2 = parser.OFPActionSetQueue(0)
             actions_2 = [queue_2, parser.OFPActionOutput(port_2)]
-           
+
+            # action weight 
             weight_1 = weight
             weight_2 = 100-weight
 
             watch_port = ofproto_v1_3.OFPP_ANY
             watch_group = ofproto_v1_3.OFPQ_ALL
 
+            # create buckets 
             buckets = [
                 parser.OFPBucket(weight_1, watch_port, watch_group, actions_1),
                 parser.OFPBucket(weight_2, watch_port, watch_group, actions_2),
             ]
+            # group id define group  
             group_id = 50
+            
             req = parser.OFPGroupMod(
                 datapath,
                 datapath.ofproto.OFPFC_ADD,
@@ -156,4 +168,3 @@ class SimpleSwitch13(app_manager.RyuApp):
             )
 
             datapath.send_msg(req)
-

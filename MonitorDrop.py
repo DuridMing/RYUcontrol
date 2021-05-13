@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Drop packet when packet over a threshold
+# @set_ev_cls define funtion's excution event
+
 from logging import Logger
 from operator import attrgetter
 from eventlet.wsgi import LoggerNull
@@ -29,11 +32,12 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
     def __init__(self, *args, **kwargs):
         super(MonitorDrop, self).__init__(*args, **kwargs)
         self.datapaths = {}
-        self.monitor_thread = hub.spawn(self._monitor)
+        self.monitor_thread = hub.spawn(
+            self._monitor)  # create a thread of monitor
 
     @set_ev_cls(ofp_event.EventOFPStateChange,
                 [MAIN_DISPATCHER, DEAD_DISPATCHER])
-    def _state_change_handler(self, ev):
+    def _state_change_handler(self, ev):  # identify the switch's situation
         datapath = ev.datapath
         if ev.state == MAIN_DISPATCHER:
             if datapath.id not in self.datapaths:
@@ -44,7 +48,7 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
                 self.logger.debug('unregister datapath: %016x', datapath.id)
                 del self.datapaths[datapath.id]
 
-    def _monitor(self):
+    def _monitor(self):  # switch monitor funtion
         while True:
             for dp in self.datapaths.values():
                 self._request_stats(dp)
@@ -61,6 +65,7 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
         req = parser.OFPFlowStatsRequest(datapath)
         datapath.send_msg(req)
 
+    # Flow status Reply --> print the status on screen
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
         body = ev.msg.body
@@ -75,6 +80,7 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
                            key=lambda flow: (flow.match['in_port'],
                                              flow.match['eth_dst'])):
             if stat.instructions[0].actions:
+                # logger.info() --> print
                 self.logger.info('%016x %8x %17s %8x %8d %8d',
                                  ev.msg.datapath.id,
                                  stat.match['in_port'], stat.match['eth_dst'],
@@ -92,6 +98,7 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
                 #                  -1,
                 #                  stat.packet_count, stat.byte_count))
 
+    # reply port status --> packet's receive and transport byte
     @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
     def _port_stats_reply_handler(self, ev):
         body = ev.msg.body
@@ -109,6 +116,8 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
                              stat.rx_packets, stat.rx_bytes, stat.rx_errors,
                              stat.tx_packets, stat.tx_bytes, stat.tx_errors)
 
+    # when packet over threshold
+    # monitor using port status reply
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _over_packet_handler(self, ev):
         body = ev.msg.body
@@ -118,6 +127,7 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
         for stat in sorted([flow for flow in body if flow.priority == 1],
                            key=lambda flow: (flow.match['in_port'],
                                              flow.match['eth_dst'])):
+            # threshod setting
             if (stat.packet_count > 10
                 and stat.match['eth_dst'] not in eth_dst
                     and stat.match['eth_src'] not in eth_src):
@@ -133,19 +143,24 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
             # print(type(stat))
             # print(stat.match)
 
+        # logger what src, dst over threshold
         for i in range(len(eth_src)):
             self.logger.info(
                 '\033[31mWARN:%17s to %17s has too more packets\033[0m', eth_src[i], eth_dst[i])
 
+    # Over packet action(flowtable rule) --> drop
     def FlowDrop(self, Dmatch, datapath):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
+        # flow macth
         match = parser.OFPMatch(
             in_port=Dmatch['in_port'], eth_dst=Dmatch['eth_dst'], eth_src=Dmatch['eth_src'])
 
+        # clear action
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_CLEAR_ACTIONS, [])]
 
+        # OpenFlow rule
         mod = parser.OFPFlowMod(datapath=datapath,
                                 table_id=Dmatch['table_id'],
                                 match=match,
@@ -154,4 +169,6 @@ class MonitorDrop(simple_switch_13.SimpleSwitch13):
                                 instructions=inst)
 
         # self.logger.info(mod)
+
+        # send to the switch
         datapath.send_msg(mod)
