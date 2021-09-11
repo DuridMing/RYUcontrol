@@ -22,7 +22,8 @@ from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.lib import hub
 from ryu.lib import packet
-from ryu.lib.packet import packet ,ethernet ,ether_types
+from ryu.lib.packet import packet, ethernet, ether_types
+
 
 class Identify_pkt(simple_switch_13.SimpleSwitch13):
 
@@ -86,11 +87,11 @@ class Identify_pkt(simple_switch_13.SimpleSwitch13):
                                  stat.match['in_port'], stat.match['eth_dst'],
                                  -1,
                                  stat.packet_count, stat.byte_count)
-                print('%016x %8x %17s %8x %8d %8d'%(
-                                 ev.msg.datapath.id,
-                                 stat.match['in_port'], stat.match['eth_dst'],
-                                 -1,
-                                 stat.packet_count, stat.byte_count))
+                print('%016x %8x %17s %8x %8d %8d' % (
+                    ev.msg.datapath.id,
+                    stat.match['in_port'], stat.match['eth_dst'],
+                    -1,
+                    stat.packet_count, stat.byte_count))
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _over_packet_handler(self, ev):
@@ -113,22 +114,23 @@ class Identify_pkt(simple_switch_13.SimpleSwitch13):
             # print(type(stat))
             # print(stat.match)
 
-
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
-    def Id_packet(self , ev):
+    def Id_packet(self, ev):
+        # identify packet(protocal)
         msg = ev.msg
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocol(ethernet.ethernet)
         print(eth)
-        
+
     def FlowDrop(self, Dmatch, datapath):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
+        # setting rule to block udp packet
         match = parser.OFPMatch(
             eth_type=0x0800,
             ip_proto=17,
-            in_port=Dmatch['in_port'], 
+            in_port=Dmatch['in_port'],
             eth_dst=Dmatch['eth_dst'])
 
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_CLEAR_ACTIONS, [])]

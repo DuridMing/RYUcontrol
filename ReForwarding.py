@@ -132,6 +132,8 @@ class ReForwarding(Switch13.SimpleSwitch13):
         match = parser.OFPMatch(in_port=1, eth_dst=eth_dst ,eth_src=eth_src)
         # match = parser.OFPMatch(in_port=1, ipv4_src="10.0.0.1" ,ipv4_dst="10.0.0.3")
 
+        # set rule using group table
+        # set priority
         actions = [parser.OFPActionGroup(50)]
 
         inst = [parser.OFPInstructionActions(
@@ -161,7 +163,7 @@ class ReForwarding(Switch13.SimpleSwitch13):
                                 table_id=table_id,
                                 match=match,
                                 priority=1,
-                                flags=ofp.OFPFF_RESET_COUNTS,
+                                flags=ofp.OFPFF_RESET_COUNTS, # this flag setting the switch counting to reset
                                 instructions=[])
 
         datapath.send_msg(mod)
